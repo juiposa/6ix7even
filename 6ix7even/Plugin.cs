@@ -2,7 +2,10 @@
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using System.IO;
+using _6ix7even.Agent;
+using _6ix7even.Signature;
 using _6ix7even.Windows;
+using Dalamud.Game;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 
@@ -14,10 +17,19 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
+    [PluginService] internal static IPartyList PartyList { get; private set; } = null!;
+    [PluginService] internal static IChatGui Chat { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    
+    [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
+    
+    internal static State state;
 
-    private const string CommandName = "/6ix7even";
+    private const string CommandName = "/sixseven";
+    private const string CommandNameShort = "/sxsv";
 
     public Configuration Configuration { get; init; }
 
@@ -27,20 +39,27 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
+        state = new State(SigScanner);
+        SigLocator sig = new SigLocator(state);
+        
+        state.GetSignatures();
+
+        ActionAgent agent = new ActionAgent(state);
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-
-        // You might normally want to embed resources and load them from the manifest stream
-        var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
-
+        
         ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, goatImagePath);
+        MainWindow = new MainWindow(this, PlayerState, ObjectTable, PartyList, agent);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "A useful message to display in /xlhelp"
+            HelpMessage = "Show 6ix7even config"
+        });
+        CommandManager.AddHandler(CommandNameShort, new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Show 6ix7even config"
         });
 
         // Tell the UI system that we want our windows to be drawn throught he window system
@@ -72,6 +91,7 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
+        CommandManager.RemoveHandler(CommandNameShort);
     }
 
     private void OnCommand(string command, string args)
@@ -82,4 +102,11 @@ public sealed class Plugin : IDalamudPlugin
     
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
+
+    public static void RunCommand(string command, params string[] arguments)
+    {
+        string argument = string.Join(" ", arguments);
+        Log.Information($"COMMAND MANAGER: {Chat}");
+        Chat.Print(command + " " + argument);
+    }
 }
